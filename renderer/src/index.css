@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+/* Tokens copied from superfer's DESIGN.md, only the ones the radio uses. */
+:root {
+  color-scheme: dark;
+
+  --status: #000000;
+  --text: #e6fbff;
+  --text-muted: #7fb2c2;
+  --text-dim: #3f6674;
+  --accent: #00e1ff;
+  --info: #8c9eff;
+  --danger: #ff4d4d;
+
+  --duration-drift: 6s;
+}
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+  --font-weight-*: initial;
+  --radius-*: initial;
+  --ease-*: initial;
+
+  --spacing: 4px;
+
+  --text-11: 11px;
+  --text-11--line-height: 1.45;
+  --text-12: 12px;
+  --text-12--line-height: 1.45;
+
+  --font-weight-semibold: 600;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-mono);
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+
+  --ease-snap: cubic-bezier(0.2, 0, 0, 1);
+
+  --spacing-row: 32px;
+  --spacing-radio-panel: 280px;
+}
+
+@theme inline {
+  --color-status: var(--status);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+  --color-accent: var(--accent);
+  --color-info: var(--info);
+  --color-danger: var(--danger);
+  --color-transparent: transparent;
+}
+
+/* The window is transparent; the panel draws itself. */
+html,
+body {
+  background: transparent;
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-mono);
+}
+
+/* The radio label: accent-to-info light across the text. One full turn per --duration-drift while playing,
+   frozen where it is when paused. Reduced motion holds it still. */
+@property --radio-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 90deg;
+}
+
+@keyframes radio-drift {
+  to {
+    --radio-angle: 450deg;
+  }
+}
+
+@utility radio-text {
+  background: linear-gradient(var(--radio-angle), var(--accent), var(--info), var(--accent));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: radio-drift var(--duration-drift) linear infinite paused;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility radio-live {
+  animation-play-state: running;
+}
+
+/* The panel: black, framed on every side by the same turning gradient, since it hangs from the menu bar. */
+@utility radio-frame {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--status), var(--status)) padding-box,
+    linear-gradient(var(--radio-angle), var(--accent), var(--info), var(--accent)) border-box;
+  animation: radio-drift var(--duration-drift) linear infinite paused;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/* A focused station row: the gradient as a fill, text goes black. */
+@utility radio-fill {
+  background: linear-gradient(90deg, var(--accent), var(--info));
+}
+
+/* Equalizer bars: the gradient bottom to top, bouncing out of phase while playing, resting low when paused. */
+@keyframes radio-eq {
+  from {
+    transform: scaleY(0.25);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@utility radio-bar {
+  background: linear-gradient(to top, var(--accent), var(--info));
+  transform: scaleY(0.25);
+  animation: radio-eq 420ms ease-in-out infinite alternate paused;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
