@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, net } = require("electron");
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, net, session } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -198,6 +198,12 @@ app.whenReady().then(async () => {
     if (!win.isVisible()) return;
     hiddenAt = Date.now();
     win.hide();
+  });
+  // Some owners only allow their videos on real sites and refuse an embed from 127.0.0.1 (error 150), so YouTube
+  // sees a referrer from a domain of our own. .test is reserved and never resolves, so it can never be anyone's.
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ["https://www.youtube.com/*"] }, (details, callback) => {
+    details.requestHeaders.Referer = "https://flow-radio.test/";
+    callback({ requestHeaders: details.requestHeaders });
   });
   win.loadURL(`http://127.0.0.1:${port}/`);
 
