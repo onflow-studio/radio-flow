@@ -30,7 +30,8 @@
       "identity": null,
       "extendInfo": {
         "LSUIElement": true
-      }
+      },
+      "icon": "build/icon.icns"
     }
   },
   "packageManager": "pnpm@10.29.2",
