@@ -50,11 +50,14 @@ function serve() {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server.address().port)));
 }
 
-/* The tray icon: the panel's five-bar equalizer as an 18pt template image, bouncing while it plays. */
+/* The tray icon: the panel's five-bar equalizer in the radio gradient, --accent at the foot to --info at the
+   top. Stopped it holds still, bars staggered where the CSS animation rests; playing it bounces from there. */
 const ICON_PX = 36;
 const BAR_W = 4;
 const BAR_GAP = 3;
 const BAR_MAX = 24;
+const ACCENT = [0x00, 0xe1, 0xff];
+const INFO = [0x8c, 0x9e, 0xff];
 
 function equalizer(levels) {
   const buf = Buffer.alloc(ICON_PX * ICON_PX * 4);
@@ -64,12 +67,13 @@ function equalizer(levels) {
     const height = Math.round(level * BAR_MAX);
     const x0 = left + i * (BAR_W + BAR_GAP);
     for (let y = bottom - height; y < bottom; y++) {
-      for (let x = x0; x < x0 + BAR_W; x++) buf[(y * ICON_PX + x) * 4 + 3] = 255;
+      // Like the CSS bars, the gradient spans the full bar and a shorter bar shows only its lower part.
+      const t = (bottom - 1 - y) / (BAR_MAX - 1);
+      const [r, g, b] = ACCENT.map((c, k) => Math.round(c + (INFO[k] - c) * t));
+      for (let x = x0; x < x0 + BAR_W; x++) buf.set([b, g, r, 255], (y * ICON_PX + x) * 4);
     }
   });
-  const image = nativeImage.createFromBitmap(buf, { width: ICON_PX, height: ICON_PX, scaleFactor: 2 });
-  image.setTemplateImage(true);
-  return image;
+  return nativeImage.createFromBitmap(buf, { width: ICON_PX, height: ICON_PX, scaleFactor: 2 });
 }
 
 // Same motion as the CSS bars: 420ms ease-in-out between 25% and full, alternating, each bar 170ms ahead.
@@ -81,22 +85,24 @@ function levelsAt(t) {
   });
 }
 
-const RESTING = equalizer([0.25, 0.25, 0.25, 0.25, 0.25]);
-
 let tray;
 let win;
 let hiddenAt = 0;
 let state = { status: "idle", station: "" };
 let animation;
+// Animation time played so far, so a pause freezes the bars where they are and play picks up from there.
+let elapsed = 0;
 
 function setAnimating(on) {
   if (on && !animation) {
-    const started = Date.now();
-    animation = setInterval(() => tray.setImage(equalizer(levelsAt(Date.now() - started))), FRAME_MS);
+    const resumedAt = Date.now() - elapsed;
+    animation = setInterval(() => {
+      elapsed = Date.now() - resumedAt;
+      tray.setImage(equalizer(levelsAt(elapsed)));
+    }, FRAME_MS);
   } else if (!on && animation) {
     clearInterval(animation);
     animation = undefined;
-    tray.setImage(RESTING);
   }
 }
 
@@ -168,7 +174,9 @@ app.whenReady().then(async () => {
     fullscreenable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    hasShadow: true,
+    // macOS rounds and shadows a frameless window with its own, larger radius; the panel draws its own.
+    roundedCorners: false,
+    hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       // Keeps the player running while the panel is hidden.
@@ -183,7 +191,7 @@ app.whenReady().then(async () => {
   });
   win.loadURL(`http://127.0.0.1:${port}/`);
 
-  tray = new Tray(RESTING);
+  tray = new Tray(equalizer(levelsAt(0)));
   tray.setToolTip("Get in Flow");
   tray.on("click", togglePanel);
   tray.on("right-click", () => tray.popUpContextMenu(contextMenu()));
