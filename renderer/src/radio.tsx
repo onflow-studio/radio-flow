@@ -198,8 +198,9 @@ function parseLink(text: string): { video: string } | { playlist: string } | nul
   if (host === "youtu.be" && first) return { video: first };
   if (host !== "youtube.com") return null;
   const list = url.searchParams.get("list");
-  if (list) return { playlist: list };
   const v = url.searchParams.get("v");
+  // A Mix (`RD…`) is YouTube's own radio around a video, and it will not start in an embedded player: keep the video.
+  if (list && !(list.startsWith("RD") && v)) return { playlist: list };
   if (v) return { video: v };
   if (["live", "shorts", "embed"].includes(first) && second) return { video: second };
   return null;
@@ -228,6 +229,8 @@ type Mode =
 
 export function Radio() {
   const [status, setStatus] = useState<Status>("idle");
+  // Set when the station itself cannot play here, as opposed to a network or loading failure.
+  const [blocked, setBlocked] = useState(false);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const list = useSyncExternalStore(subscribe, readStations);
   const storedId = useSyncExternalStore(subscribe, readStation);
@@ -310,6 +313,8 @@ export function Radio() {
   );
 
   const stallTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // YouTube reports a pause right after an error; once a station has failed, its later states are ignored.
+  const failed = useRef(false);
 
   const tuneTo = (player: YTPlayer, next: Station) => {
     clearTimeout(stallTimer.current);
@@ -320,12 +325,14 @@ export function Radio() {
     }, STALL_MS);
     tunedRef.current = next;
     ytState.current = null;
+    failed.current = false;
     const resumed = tune(player, next);
     playlistSetup.current = "playlist" in next ? (resumed ? "loop" : "shuffle") : null;
   };
 
   const start = async () => {
     setStatus("loading");
+    setBlocked(false);
     remember();
     playerRef.current?.destroy();
     playerRef.current = null;
@@ -341,6 +348,7 @@ export function Radio() {
         events: {
           onReady: () => playerRef.current && tuneTo(playerRef.current, stationRef.current),
           onStateChange: ({ data }) => {
+            if (failed.current) return;
             ytState.current = data;
             if (data === YT_PLAYING && tunedRef.current && !tunedRef.current.live && playerRef.current?.getVideoData?.().isLive) {
               markLive(tunedRef.current);
@@ -356,8 +364,11 @@ export function Radio() {
             if (data === YT_ENDED && tunedRef.current && "video" in tunedRef.current) writePosition(tunedRef.current.id, null);
             setStatus(data === YT_PLAYING ? "playing" : data === YT_BUFFERING ? "buffering" : "paused");
           },
-          onError: () => {
+          onError: ({ data }) => {
+            failed.current = true;
             clearTimeout(stallTimer.current);
+            // 101 and 150: the owner does not allow playback outside youtube.com. 100: removed or private.
+            setBlocked([100, 101, 150].includes(data));
             setStatus("error");
           },
         },
@@ -532,7 +543,11 @@ export function Radio() {
         <div className="flex items-center gap-3 border-b border-accent/30 px-3 pt-3 pb-2">
           <Equalizer live={playing} />
           <span className="min-w-0 flex-1 truncate text-11 font-semibold tracking-widest uppercase">
-            <span className="text-text-dim">{on ? "on air" : "tuned"} </span>
+            {blocked && status === "error" ? (
+              <span className="text-danger">not playable outside youtube </span>
+            ) : (
+              <span className="text-text-dim">{on ? "on air" : "tuned"} </span>
+            )}
             <span className="radio-text">{station.label}</span>
           </span>
         </div>
