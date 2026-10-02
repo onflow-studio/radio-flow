@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/hero.png" alt="Flow Radio: a station panel hanging from the macOS menu bar, playing hacker radio" width="800">
+  <img src="docs/hero.png" alt="Radio Flow: a station panel hanging from the macOS menu bar, playing hacker radio" width="800">
 </p>
 
-<h1 align="center">Flow Radio</h1>
+<h1 align="center">Radio Flow</h1>
 
 <p align="center">
   <b>Deep-work music one click away, in your menu bar.</b><br>
@@ -19,12 +19,12 @@
 
 ## Why
 
-Focus music lives in a YouTube tab. The tab gets closed, buried under forty others, or turns into "just one video". Flow Radio puts the music somewhere it can't distract you: a tiny equalizer in the menu bar. The panel opens, you pick a station, it closes and stays out of your way.
+Focus music lives in a YouTube tab. The tab gets closed, buried under forty others, or turns into "just one video". Radio Flow puts the music somewhere it can't distract you: a tiny equalizer in the menu bar. The panel opens, you pick a station, it closes and stays out of your way.
 
 ## What you get
 
 - **Five stations, ready to go.** Hacker radio (live), 40hz gamma, minimal techno, a deep work mix and brain.fm sessions.
-- **Add your own.** Paste any YouTube video, live stream or playlist link. Flow Radio names the station from the video's title.
+- **Add your own.** Paste any YouTube video, live stream or playlist link. Radio Flow names the station from the video's title.
 - **Picks up where you left off.** Each station remembers its spot, even after you quit or restart. Playlists keep their shuffled order.
 - **Always know where you are.** The play bar shows elapsed time and length, or `LIVE` for streams, with a progress line glowing along its edge.
 - **An icon that shows what's on.** The equalizer holds still when stopped and bounces while music plays, so you can tell at a glance.
@@ -34,12 +34,12 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 
 ## Install
 
-1. Download `Flow.Radio-*-arm64-mac.zip` from the [latest release](https://github.com/onflow-studio/radio-flow/releases/latest) and unzip it.
-2. Move **Flow Radio.app** to `/Applications`.
+1. Download `Radio.Flow-*-arm64-mac.zip` from the [latest release](https://github.com/onflow-studio/radio-flow/releases/latest) and unzip it.
+2. Move **Radio Flow.app** to `/Applications`.
 3. The app isn't notarized by Apple, so macOS blocks the first launch. Clear the download flag once:
 
    ```sh
-   xattr -dr com.apple.quarantine "/Applications/Flow Radio.app"
+   xattr -dr com.apple.quarantine "/Applications/Radio Flow.app"
    ```
 
 4. Open it. The equalizer appears in your menu bar. Right-click it and tick **Open at Login** to keep it there.
@@ -59,9 +59,9 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 
 ## How it works
 
-Flow Radio is a small Electron app. The panel is a React page in a frameless window that only ever hides, so the music keeps playing while it's closed. Audio comes from the official YouTube IFrame player, kept in a hidden 1px box inside that window. YouTube's ads, terms and creators all stay in the loop.
+Radio Flow is a small Electron app. The panel is a React page in a frameless window that only ever hides, so the music keeps playing while it's closed. Audio comes from the official YouTube IFrame player, kept in a hidden 1px box inside that window. YouTube's ads, terms and creators all stay in the loop.
 
-Your stations and the spot each one stopped at are saved to `~/Library/Application Support/Flow Radio/store.json`. That file is the only thing it stores, and it never leaves your Mac.
+Your stations and the spot each one stopped at are saved to `~/Library/Application Support/Radio Flow/store.json`. That file is the only thing it stores, and it never leaves your Mac.
 
 ## Build it yourself
 
@@ -72,7 +72,7 @@ git clone https://github.com/onflow-studio/radio-flow.git
 cd radio-flow
 pnpm install
 pnpm start          # build the panel and launch from source
-pnpm install-app    # package and copy to /Applications/Flow Radio.app
+pnpm install-app    # package and copy to /Applications/Radio Flow.app
 pnpm release        # package a distributable zip into release/
 ```
 
@@ -80,7 +80,7 @@ To change the five starting stations, edit `DEFAULT_STATIONS` in [`renderer/src/
 
 ## Origin
 
-Flow Radio started as the radio built into the status line of email-flow, a personal mail client. It got so much use that it moved out to the menu bar to play alongside everything else.
+Radio Flow started as the radio built into the status line of email-flow, a personal mail client. It got so much use that it moved out to the menu bar to play alongside everything else.
 
 ## License
 

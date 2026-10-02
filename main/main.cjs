@@ -19,6 +19,12 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 /* Persistence: a JSON file in userData, read once, written on change. */
 const storePath = path.join(app.getPath("userData"), "store.json");
+// The app was called Flow Radio, and its data folder carries the name: bring stations and positions across once.
+const legacyStorePath = path.join(app.getPath("appData"), "Flow Radio", "store.json");
+if (!fs.existsSync(storePath) && fs.existsSync(legacyStorePath)) {
+  fs.mkdirSync(path.dirname(storePath), { recursive: true });
+  fs.copyFileSync(legacyStorePath, storePath);
+}
 let store = {};
 try {
   store = JSON.parse(fs.readFileSync(storePath, "utf8"));
@@ -163,7 +169,7 @@ function contextMenu() {
       checked: app.getLoginItemSettings().openAtLogin,
       click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
     },
-    { label: "Quit Flow Radio", role: "quit" },
+    { label: "Quit Radio Flow", role: "quit" },
   ]);
 }
 

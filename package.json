@@ -1,7 +1,7 @@
 {
   "name": "radio-flow",
-  "productName": "Flow Radio",
-  "version": "0.1.2",
+  "productName": "Radio Flow",
+  "version": "0.1.3",
   "private": true,
   "description": "A focus radio that lives in your macOS menu bar",
   "main": "main/main.cjs",
@@ -10,12 +10,12 @@
     "start": "vite build && electron .",
     "typecheck": "tsc --noEmit",
     "dist": "vite build && electron-builder --mac dir",
-    "install-app": "pnpm dist && rm -rf \"/Applications/Flow Radio.app\" && cp -R \"release/mac-arm64/Flow Radio.app\" /Applications/",
+    "install-app": "pnpm dist && rm -rf \"/Applications/Radio Flow.app\" && cp -R \"release/mac-arm64/Radio Flow.app\" /Applications/",
     "release": "vite build && electron-builder --mac zip"
   },
   "build": {
     "appId": "dev.f3r.flow-radio",
-    "productName": "Flow Radio",
+    "productName": "Radio Flow",
     "directories": {
       "output": "release"
     },
