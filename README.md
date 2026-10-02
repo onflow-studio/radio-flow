@@ -33,7 +33,7 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 
 ## Install
 
-1. Download `Flow Radio-*-arm64-mac.zip` from the [latest release](https://github.com/f3r/flow-radio/releases/latest) and unzip it.
+1. Download `Flow.Radio-*-arm64-mac.zip` from the [latest release](https://github.com/f3r/flow-radio/releases/latest) and unzip it.
 2. Move **Flow Radio.app** to `/Applications`.
 3. The app isn't notarized by Apple, so macOS blocks the first launch. Clear the download flag once:
 
