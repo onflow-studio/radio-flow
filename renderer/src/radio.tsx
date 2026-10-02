@@ -27,6 +27,7 @@ const STATIONS_KEY = "radio-stations";
 const LABEL_MAX = 40;
 const POSITIONS_KEY = "radio-positions";
 const SAVE_INTERVAL_MS = 5_000;
+const CLOCK_MS = 500;
 // A station that has not started playing by then shows retry instead of a silent, glowing dot.
 const STALL_MS = 20_000;
 
@@ -56,6 +57,7 @@ type YTPlayer = {
   loadPlaylist(options: { list: string; listType: "playlist" }): void;
   loadPlaylist(playlist: string[], index: number, startSeconds: number): void;
   getCurrentTime(): number;
+  getDuration(): number;
   getPlaylist(): string[] | null;
   getPlaylistIndex(): number;
   setShuffle(shuffle: boolean): void;
@@ -231,6 +233,8 @@ export function Radio() {
   const [status, setStatus] = useState<Status>("idle");
   // Set when the station itself cannot play here, as opposed to a network or loading failure.
   const [blocked, setBlocked] = useState(false);
+  // Where the tuned track is, for the deck's clock and progress line. Null before anything has loaded.
+  const [clock, setClock] = useState<{ time: number; duration: number; live: boolean } | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const list = useSyncExternalStore(subscribe, readStations);
   const storedId = useSyncExternalStore(subscribe, readStation);
@@ -293,6 +297,21 @@ export function Radio() {
   useEffect(() => {
     if (status !== "playing") return;
     const timer = setInterval(() => rememberRef.current(), SAVE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [status]);
+
+  useEffect(() => {
+    if (status === "idle" || status === "error" || status === "loading") return setClock(null);
+    const read = () => {
+      const player = playerRef.current;
+      if (!player || ytState.current === null) return;
+      const duration = player.getDuration();
+      const live = Boolean(tunedRef.current?.live || player.getVideoData?.().isLive);
+      setClock({ time: player.getCurrentTime(), duration: live ? 0 : duration, live });
+    };
+    read();
+    if (status !== "playing" && status !== "buffering") return;
+    const timer = setInterval(read, CLOCK_MS);
     return () => clearInterval(timer);
   }, [status]);
 
@@ -472,10 +491,12 @@ export function Radio() {
   });
   useEffect(() => window.flow.onToggle(() => toggleRef.current()), []);
 
-  // The rows: every station, then `add station`.
+  // The rows: every station, then `add station`, then the deck.
   const focusOption = (index: number) => {
-    const n = list.length + 1;
-    optionRefs.current[(index + n) % n]?.focus();
+    const n = list.length + 2;
+    const i = (index + n) % n;
+    if (i === list.length + 1) buttonRef.current?.focus();
+    else optionRefs.current[i]?.focus();
   };
 
   // Keys that reach the panel itself, before any row has focus.
@@ -502,7 +523,7 @@ export function Radio() {
   };
 
   const onOptionKey = (e: React.KeyboardEvent, index: number) => {
-    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: list.length };
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: list.length + 1 };
     const target = list[index];
     if (e.key in moves) {
       e.preventDefault();
@@ -533,7 +554,7 @@ export function Radio() {
         onKeyDown={onPanelKey}
         onPointerLeave={() => {
           // Drops the inverted row the mouse left behind; a field or confirm being typed in keeps its focus.
-          if (document.activeElement?.closest("[role=menu] button")) rootRef.current?.focus();
+          if (document.activeElement?.closest("[data-row]")) rootRef.current?.focus();
         }}
         className={cn(
           "radio-frame flex w-radio-panel flex-col items-stretch rounded-md bg-status text-text outline-none",
@@ -603,6 +624,7 @@ export function Radio() {
                     }}
                     type="button"
                     role="menuitemradio"
+                    data-row
                     aria-checked={current}
                     tabIndex={-1}
                     onClick={() => choose(s)}
@@ -668,6 +690,7 @@ export function Radio() {
                 }}
                 type="button"
                 role="menuitem"
+                data-row
                 tabIndex={-1}
                 onClick={() => setMode({ kind: "add" })}
                 onKeyDown={(e) => onOptionKey(e, list.length)}
@@ -682,30 +705,52 @@ export function Radio() {
             )}
           </div>
         )}
-        <div className="flex border-t border-accent/30">
+        <div className="relative border-t border-accent/30">
+          {/* Progress along the deck's top edge: the track's share for videos, a full drifting line when live. */}
+          {clock && status !== "error" ? (
+            <span
+              aria-hidden
+              className={cn(
+                "absolute -top-px left-0 h-0.5 transition-[width] duration-500 ease-linear",
+                clock.live ? "radio-frame-line w-full" : "radio-fill",
+                playing && "radio-live",
+              )}
+              style={clock.live ? undefined : { width: `${clock.duration ? (clock.time / clock.duration) * 100 : 0}%` }}
+            />
+          ) : null}
           <button
             ref={buttonRef}
             type="button"
+            data-row
             onClick={toggle}
             onKeyDown={onButtonKey}
+            onPointerMove={(e) => e.currentTarget.focus({ preventScroll: true })}
             aria-label={label}
             aria-pressed={on}
             className={cn(
-              // 24px tall, no fill: the gradient label carries the state.
-              "my-1 flex h-6 items-center justify-center gap-2 self-center mx-auto rounded-sm border border-transparent px-2 text-11 text-text-muted transition-colors duration-80 ease-snap outline-none hover:text-text focus-visible:border-accent",
-              on && "text-text",
-              status === "error" && "text-danger hover:text-danger",
+              // The deck: the panel's play control, full width. Under the mouse or keys it inverts like a row.
+              "group/deck flex h-deck w-full items-center gap-3 px-3 text-left outline-none focus:radio-fill",
+              status === "error" ? "text-danger" : on ? "text-text" : "text-text-muted",
             )}
           >
-            {status === "error" ? (
-              <RotateCw aria-hidden className="size-3" strokeWidth={1.5} />
-            ) : (
-              // The same equalizer in every state: still when stopped, paused or loading, bouncing while it plays.
-              <Equalizer live={status === "playing"} />
-            )}
-            <span className={cn(status !== "error" && "radio-text", playing && "radio-live")}>
-              {status === "error" ? "retry" : on ? "Flow Ongoing" : "Get in Flow"}
+            <span className="flex w-5 justify-center">
+              {status === "error" ? (
+                <RotateCw aria-hidden className="size-4 group-focus/deck:text-status" strokeWidth={2} />
+              ) : (
+                // The same equalizer in every state: still when stopped, paused or loading, bouncing while it plays.
+                <Equalizer large live={status === "playing"} />
+              )}
             </span>
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-15 font-semibold tracking-wide whitespace-nowrap group-focus/deck:text-status",
+                status !== "error" && "radio-text group-focus/deck:[background:none]",
+                playing && "radio-live",
+              )}
+            >
+              {status === "error" ? "Retry" : on ? "Flow Ongoing" : "Get in Flow"}
+            </span>
+            <DeckMeta status={status} clock={clock} />
           </button>
         </div>
       </div>
@@ -838,18 +883,52 @@ function RowAction({ label, onClick, children }: { label: string; onClick: () =>
 }
 
 /** Five bars bouncing out of phase while it plays, resting low when paused. */
-function Equalizer({ live }: { live: boolean }) {
+function Equalizer({ live, large }: { live: boolean; large?: boolean }) {
   return (
-    <span aria-hidden className="flex h-3 items-end gap-0.5">
+    <span aria-hidden className={cn("flex items-end", large ? "h-4 gap-0.75" : "h-3 gap-0.5")}>
       {[0, 1, 2, 3, 4].map((i) => (
         <span
           key={i}
-          className={cn("radio-bar h-full w-0.5 origin-bottom", live && "radio-live")}
+          className={cn(
+            "radio-bar h-full origin-bottom",
+            large ? "w-0.75 group-focus/deck:[background:var(--status)]" : "w-0.5",
+            live && "radio-live",
+          )}
           style={{ animationDelay: `${-i * 170}ms` }}
         />
       ))}
     </span>
   );
+}
+
+/** The deck's right edge: `live` for streams, elapsed and length for videos, `space` to start when stopped. */
+function DeckMeta({ status, clock }: { status: Status; clock: { time: number; duration: number; live: boolean } | null }) {
+  const meta = "shrink-0 text-11 font-semibold whitespace-nowrap tabular-nums uppercase group-focus/deck:text-status";
+  if (status === "error") return null;
+  if (status === "idle") return <span className={cn(meta, "tracking-widest text-text-dim")}>space</span>;
+  if (!clock) return null;
+  if (clock.live) {
+    return (
+      <span className={cn(meta, "flex items-center gap-1.5 tracking-widest text-accent")}>
+        <span className={cn("size-1.5 rounded-full bg-accent group-focus/deck:bg-status", status === "playing" && "animate-pulse")} />
+        live
+      </span>
+    );
+  }
+  return (
+    <span className={cn(meta, "text-text-muted")}>
+      {formatTime(clock.time)}
+      <span className="text-text-dim group-focus/deck:text-status"> / {formatTime(clock.duration)}</span>
+    </span>
+  );
+}
+
+function formatTime(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
 function cn(...classes: (string | false | null | undefined)[]) {

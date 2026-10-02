@@ -29,6 +29,8 @@
   --text-11--line-height: 1.45;
   --text-12: 12px;
   --text-12--line-height: 1.45;
+  --text-15: 15px;
+  --text-15--line-height: 1.45;
 
   --font-weight-semibold: 600;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -41,6 +43,7 @@
 
   --spacing-row: 32px;
   --spacing-radio-panel: 280px;
+  --spacing-deck: 52px;
 }
 
 @theme inline {
@@ -104,6 +107,16 @@ body {
   background:
     linear-gradient(var(--status), var(--status)) padding-box,
     linear-gradient(var(--radio-angle), var(--accent), var(--info), var(--accent)) border-box;
+  animation: radio-drift var(--duration-drift) linear infinite paused;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/* A live stream's progress: the full gradient line, drifting with the frame while it plays. */
+@utility radio-frame-line {
+  background: linear-gradient(var(--radio-angle), var(--accent), var(--info), var(--accent));
   animation: radio-drift var(--duration-drift) linear infinite paused;
 
   @media (prefers-reduced-motion: reduce) {
