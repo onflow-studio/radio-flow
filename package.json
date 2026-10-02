@@ -1,5 +1,5 @@
 {
-  "name": "flow-radio",
+  "name": "radio-flow",
   "productName": "Flow Radio",
   "version": "0.1.2",
   "private": true,
@@ -54,6 +54,6 @@
   "author": "Fer Martin",
   "repository": {
     "type": "git",
-    "url": "https://github.com/onflow-studio/flow-radio"
+    "url": "https://github.com/onflow-studio/radio-flow"
   }
 }

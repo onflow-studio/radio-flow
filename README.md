@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/onflow-studio/flow-radio/releases/latest"><b>Download for macOS (Apple Silicon)</b></a>
+  <a href="https://github.com/onflow-studio/radio-flow/releases/latest"><b>Download for macOS (Apple Silicon)</b></a>
   ·
   <a href="#build-it-yourself">Build from source</a>
 </p>
@@ -34,7 +34,7 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 
 ## Install
 
-1. Download `Flow.Radio-*-arm64-mac.zip` from the [latest release](https://github.com/onflow-studio/flow-radio/releases/latest) and unzip it.
+1. Download `Flow.Radio-*-arm64-mac.zip` from the [latest release](https://github.com/onflow-studio/radio-flow/releases/latest) and unzip it.
 2. Move **Flow Radio.app** to `/Applications`.
 3. The app isn't notarized by Apple, so macOS blocks the first launch. Clear the download flag once:
 
@@ -68,8 +68,8 @@ Your stations and the spot each one stopped at are saved to `~/Library/Applicati
 Needs Node 22+ and pnpm.
 
 ```sh
-git clone https://github.com/onflow-studio/flow-radio.git
-cd flow-radio
+git clone https://github.com/onflow-studio/radio-flow.git
+cd radio-flow
 pnpm install
 pnpm start          # build the panel and launch from source
 pnpm install-app    # package and copy to /Applications/Flow Radio.app
