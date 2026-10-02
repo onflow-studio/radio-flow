@@ -80,7 +80,7 @@ To change the five starting stations, edit `DEFAULT_STATIONS` in [`renderer/src/
 
 ## Origin
 
-Flow Radio started as the radio built into the status line of superfer, a personal mail client. It got so much use that it moved out to the menu bar to play alongside everything else.
+Flow Radio started as the radio built into the status line of email-flow, a personal mail client. It got so much use that it moved out to the menu bar to play alongside everything else.
 
 ## License
 

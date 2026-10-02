@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Tokens copied from superfer's DESIGN.md, only the ones the radio uses. */
+/* Tokens copied from email-flow's DESIGN.md, only the ones the radio uses. */
 :root {
   color-scheme: dark;
 

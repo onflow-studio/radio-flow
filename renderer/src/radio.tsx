@@ -2,7 +2,7 @@ import { Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
- * Background audio from YouTube, the station panel from superfer's radio hanging from the menu bar. The
+ * Background audio from YouTube, the station panel from email-flow's radio hanging from the menu bar. The
  * window only hides, never closes, so playback survives the panel going away. Nothing loads from YouTube
  * until the first play. Each station resumes where it was left, across restarts; live streams have nothing
  * to resume. Stations can be added from a YouTube link, renamed and removed; renames and removals ask first.
