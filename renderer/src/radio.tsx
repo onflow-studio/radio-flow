@@ -743,7 +743,7 @@ export function Radio() {
             </span>
             <span
               className={cn(
-                "min-w-0 flex-1 truncate text-15 font-semibold tracking-wide whitespace-nowrap group-focus/deck:text-status",
+                "min-w-0 flex-1 truncate text-15 font-semibold whitespace-nowrap group-focus/deck:text-status",
                 status !== "error" && "radio-text group-focus/deck:[background:none]",
                 playing && "radio-live",
               )}
@@ -918,7 +918,7 @@ function DeckMeta({ status, clock }: { status: Status; clock: { time: number; du
   return (
     <span className={cn(meta, "text-text-muted")}>
       {formatTime(clock.time)}
-      <span className="text-text-dim group-focus/deck:text-status"> / {formatTime(clock.duration)}</span>
+      <span className="text-text-dim group-focus/deck:text-status">/{formatTime(clock.duration)}</span>
     </span>
   );
 }

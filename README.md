@@ -26,6 +26,7 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 - **Five stations, ready to go.** Hacker radio (live), 40hz gamma, minimal techno, a deep work mix and brain.fm sessions.
 - **Add your own.** Paste any YouTube video, live stream or playlist link. Flow Radio names the station from the video's title.
 - **Picks up where you left off.** Each station remembers its spot, even after you quit or restart. Playlists keep their shuffled order.
+- **Always know where you are.** The play bar shows elapsed time and length, or `LIVE` for streams, with a progress line glowing along its edge.
 - **An icon that shows what's on.** The equalizer holds still when stopped and bounces while music plays, so you can tell at a glance.
 - **Keyboard first.** Arrows to move, enter to play, `e` to rename, delete to remove, esc to close.
 - **Careful edits.** Renames and removals ask before they happen.
