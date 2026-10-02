@@ -27,6 +27,8 @@ const STATIONS_KEY = "radio-stations";
 const LABEL_MAX = 40;
 const POSITIONS_KEY = "radio-positions";
 const SAVE_INTERVAL_MS = 5_000;
+// A station that has not started playing by then shows retry instead of a silent, glowing dot.
+const STALL_MS = 20_000;
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "error";
 
@@ -307,7 +309,15 @@ export function Radio() {
     [],
   );
 
+  const stallTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   const tuneTo = (player: YTPlayer, next: Station) => {
+    clearTimeout(stallTimer.current);
+    stallTimer.current = setTimeout(() => {
+      playerRef.current?.destroy();
+      playerRef.current = null;
+      setStatus("error");
+    }, STALL_MS);
     tunedRef.current = next;
     ytState.current = null;
     const resumed = tune(player, next);
@@ -335,6 +345,7 @@ export function Radio() {
             if (data === YT_PLAYING && tunedRef.current && !tunedRef.current.live && playerRef.current?.getVideoData?.().isLive) {
               markLive(tunedRef.current);
             }
+            if (data === YT_PLAYING) clearTimeout(stallTimer.current);
             if (data === YT_PLAYING && playlistSetup.current) {
               if (playlistSetup.current === "shuffle") playerRef.current?.setShuffle(true);
               playerRef.current?.setLoop(true);
@@ -345,7 +356,10 @@ export function Radio() {
             if (data === YT_ENDED && tunedRef.current && "video" in tunedRef.current) writePosition(tunedRef.current.id, null);
             setStatus(data === YT_PLAYING ? "playing" : data === YT_BUFFERING ? "buffering" : "paused");
           },
-          onError: () => setStatus("error"),
+          onError: () => {
+            clearTimeout(stallTimer.current);
+            setStatus("error");
+          },
         },
       });
     } catch {
@@ -357,7 +371,10 @@ export function Radio() {
     const player = playerRef.current;
     if (status === "loading") return;
     if (status === "idle" || status === "error" || !player) void start();
-    else if (status === "playing" || status === "buffering") player.pauseVideo();
+    else if (status === "playing" || status === "buffering") {
+      clearTimeout(stallTimer.current);
+      player.pauseVideo();
+    }
     else if (status === "paused") player.playVideo();
   };
 
@@ -373,11 +390,9 @@ export function Radio() {
     saveStation(next.id);
     stationRef.current = next;
     if (status === "loading") return; // onReady tunes to stationRef
-    if (live) {
-      remember();
-      setStatus("buffering");
-      tuneTo(player, next);
-    } else void start();
+    // A fresh player per station: a loaded player can keep the previous station's playlist when the next
+    // one (a YouTube Mix, say) will not load into it, and that playlist would then be saved as the new one's.
+    void start();
   };
 
   // A live stream has no position to resume; added stations only find out once they play.
