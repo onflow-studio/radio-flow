@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, net } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -125,6 +125,16 @@ ipcMain.on("resize", (_e, height) => {
 });
 
 ipcMain.on("hide", () => win.hide());
+
+// A new station's name, from YouTube's oEmbed. Null when the link has no public title.
+ipcMain.handle("title", async (_e, url) => {
+  try {
+    const res = await net.fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`);
+    return res.ok ? (await res.json()).title : null;
+  } catch {
+    return null;
+  }
+});
 
 function showPanel() {
   const bounds = tray.getBounds();

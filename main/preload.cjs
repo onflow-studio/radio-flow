@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("flow", {
   status: (state) => ipcRenderer.send("status", state),
   resize: (height) => ipcRenderer.send("resize", height),
   hide: () => ipcRenderer.send("hide"),
+  title: (url) => ipcRenderer.invoke("title", url),
   onToggle: (listener) => listen("toggle", listener),
   onShown: (listener) => listen("shown", listener),
 });

@@ -4,6 +4,7 @@ superfer's radio as a macOS menu bar app. Background focus audio from YouTube, f
 
 - Click the equalizer in the menu bar: the station panel drops down. Pick a station, or `Get in Flow` to play and pause.
 - Keys in the panel: arrows move through stations, enter/space plays, esc closes.
+- `+ add station` takes a YouTube video, live or playlist link and names it from the title. On a highlighted row, the pencil or `e` renames and the bin or delete removes, both after a confirm.
 - Right-click: play/pause, open at login, quit.
 - The icon bounces while it plays.
 
