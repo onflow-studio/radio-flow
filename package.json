@@ -1,7 +1,7 @@
 {
   "name": "flow-radio",
   "productName": "Flow Radio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A focus radio that lives in your macOS menu bar",
   "main": "main/main.cjs",
