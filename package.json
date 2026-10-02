@@ -3,14 +3,15 @@
   "productName": "Flow Radio",
   "version": "0.1.0",
   "private": true,
-  "description": "Background focus radio in the macOS menu bar",
+  "description": "A focus radio that lives in your macOS menu bar",
   "main": "main/main.cjs",
   "scripts": {
     "build": "vite build",
     "start": "vite build && electron .",
     "typecheck": "tsc --noEmit",
     "dist": "vite build && electron-builder --mac dir",
-    "install-app": "pnpm dist && rm -rf \"/Applications/Flow Radio.app\" && cp -R \"release/mac-arm64/Flow Radio.app\" /Applications/"
+    "install-app": "pnpm dist && rm -rf \"/Applications/Flow Radio.app\" && cp -R \"release/mac-arm64/Flow Radio.app\" /Applications/",
+    "release": "vite build && electron-builder --mac zip"
   },
   "build": {
     "appId": "dev.f3r.flow-radio",
@@ -47,5 +48,11 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"
+  },
+  "license": "MIT",
+  "author": "Fer Martin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/f3r/flow-radio"
   }
 }
