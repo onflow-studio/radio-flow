@@ -57,6 +57,17 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 | esc, or click anywhere else | Close the panel. Music keeps playing |
 | Right-click the equalizer | Play/pause, Open at Login, Quit |
 
+## Stack
+
+```text
+>_ radio-flow --stack
+lang       TypeScript 74% · JavaScript 17% · CSS 7%
+stack      Electron · React · Vite · Tailwind 4
+talks to   YouTube, through its official player, from the first play
+stores     your stations and where each one stopped, in one file in your Library folder
+runs on    macOS, Apple Silicon · no server, no account
+```
+
 ## How it works
 
 Radio Flow is a small Electron app. The panel is a React page in a frameless window that only ever hides, so the music keeps playing while it's closed. Audio comes from the official YouTube IFrame player, kept in a hidden 1px box inside that window. YouTube's ads, terms and creators all stay in the loop.
