@@ -171,6 +171,55 @@ ipcMain.handle("title", async (_e, url) => {
   }
 });
 
+/* The shared stations pool (pool/). Nothing reaches it until random, share or keep, and every failure is a null:
+   an unreachable pool only ever shows a notice. */
+// Not deployed yet (pool/README.md): .invalid never resolves, so the app behaves as with the pool unreachable.
+const POOL_URL = "https://radio-flow-pool.invalid";
+const POOL_TIMEOUT_MS = 5_000;
+
+function poolFetch(pathname, body) {
+  return net.fetch(`${POOL_URL}${pathname}`, {
+    signal: AbortSignal.timeout(POOL_TIMEOUT_MS),
+    ...(body && { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  });
+}
+
+// A station from the pool, other than `not`: "empty" when there is none.
+ipcMain.handle("pool:random", async (_e, not) => {
+  try {
+    const query = not ? `?kind=${encodeURIComponent(not.kind)}&ref=${encodeURIComponent(not.ref)}` : "";
+    const res = await poolFetch(`/random${query}`);
+    if (res.status === 204) return "empty";
+    if (!res.ok) return null;
+    const { kind, ref, title } = await res.json();
+    if ((kind !== "video" && kind !== "playlist") || typeof ref !== "string") return null;
+    return { kind, ref, title: typeof title === "string" ? title : "" };
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle("pool:share", async (_e, source) => {
+  try {
+    const res = await poolFetch("/share", { kind: source.kind, ref: source.ref });
+    return res.status === 204 ? "shared" : res.status === 422 ? "refused" : null;
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.on("pool:keep", async (_e, source) => {
+  try {
+    await poolFetch("/keep", { kind: source.kind, ref: source.ref });
+  } catch {}
+});
+
+ipcMain.on("pool:report", async (_e, source, code) => {
+  try {
+    await poolFetch("/report", { kind: source.kind, ref: source.ref, code });
+  } catch {}
+});
+
 function showPanel() {
   const bounds = tray.getBounds();
   const x = Math.round(bounds.x + bounds.width / 2 - PANEL_WIDTH / 2);

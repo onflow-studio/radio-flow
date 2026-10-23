@@ -14,6 +14,12 @@ contextBridge.exposeInMainWorld("flow", {
   resize: (height) => ipcRenderer.send("resize", height),
   hide: () => ipcRenderer.send("hide"),
   title: (url) => ipcRenderer.invoke("title", url),
+  pool: {
+    random: (not) => ipcRenderer.invoke("pool:random", not),
+    share: (source) => ipcRenderer.invoke("pool:share", source),
+    keep: (source) => ipcRenderer.send("pool:keep", source),
+    report: (source, code) => ipcRenderer.send("pool:report", source, code),
+  },
   onToggle: (listener) => listen("toggle", listener),
   onShown: (listener) => listen("shown", listener),
 });

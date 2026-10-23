@@ -1,4 +1,4 @@
-import { Pencil, Plus, RotateCcw, RotateCw, Trash2 } from "lucide-react";
+import { Pencil, Plus, RotateCcw, RotateCw, Share2, Shuffle, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
@@ -6,8 +6,20 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
  * window only hides, never closes, so playback survives the panel going away. Nothing loads from YouTube
  * until the first play. Each station resumes where it was left, across restarts; live streams have nothing
  * to resume. Stations can be added from a YouTube link, renamed and removed; renames and removals ask first.
+ * A station can be shared to the anonymous pool, and the random row plays one from it.
  */
-type Station = { id: string; label: string; live?: boolean } & ({ video: string } | { playlist: string });
+type Station = {
+  id: string;
+  label: string;
+  live?: boolean;
+  // Set once a share to the pool has gone through.
+  shared?: boolean;
+  // A station picked from the pool: never saved, until it is kept.
+  pool?: boolean;
+} & Source;
+type Source = { video: string } | { playlist: string };
+// A station as the pool knows it.
+type PoolSource = { kind: "video" | "playlist"; ref: string };
 
 const DEFAULT_STATIONS: Station[] = [
   { id: "hacker", label: "hacker radio", video: "sjSnCKudqj0", live: true },
@@ -43,6 +55,12 @@ declare global {
       resize(height: number): void;
       hide(): void;
       title(url: string): Promise<string | null>;
+      pool: {
+        random(not: PoolSource | null): Promise<(PoolSource & { title: string }) | "empty" | null>;
+        share(source: PoolSource): Promise<"shared" | "refused" | null>;
+        keep(source: PoolSource): void;
+        report(source: PoolSource, code: number): void;
+      };
       onToggle(listener: () => void): () => void;
       onShown(listener: () => void): () => void;
     };
@@ -135,7 +153,7 @@ function writePosition(id: string, position: Position | null) {
 }
 
 function rememberPosition(player: YTPlayer, station: Station) {
-  if (station.live) return;
+  if (station.live || station.pool) return;
   const time = player.getCurrentTime();
   if ("video" in station) return writePosition(station.id, { time });
   const playlist = player.getPlaylist();
@@ -144,7 +162,7 @@ function rememberPosition(player: YTPlayer, station: Station) {
 
 /** Loads the station, from where it was left when there is a position. Returns whether it resumed. */
 function tune(player: YTPlayer, station: Station): boolean {
-  const at = station.live ? undefined : readPositions()[station.id];
+  const at = station.live || station.pool ? undefined : readPositions()[station.id];
   if ("video" in station) {
     player.loadVideoById({ videoId: station.video, startSeconds: at?.time ?? 0 });
   } else if (at?.playlist?.length) {
@@ -186,7 +204,7 @@ function subscribe(listener: () => void) {
 }
 
 /** A station from a pasted YouTube link: watch, youtu.be, live, shorts, embed and playlist links, or a bare id. */
-function parseLink(text: string): { video: string } | { playlist: string } | null {
+function parseLink(text: string): Source | null {
   const raw = text.trim();
   if (/^[\w-]{11}$/.test(raw)) return { video: raw };
   let url: URL;
@@ -216,10 +234,22 @@ function tidyTitle(title: string) {
   return cut.slice(0, cut.lastIndexOf(" ") > 0 ? cut.lastIndexOf(" ") : LABEL_MAX).replace(/[\s\p{P}]+$/u, "");
 }
 
-function canonicalUrl(source: { video: string } | { playlist: string }) {
+function canonicalUrl(source: Source) {
   return "video" in source
     ? `https://www.youtube.com/watch?v=${source.video}`
     : `https://www.youtube.com/playlist?list=${source.playlist}`;
+}
+
+function toPool(source: Source): PoolSource {
+  return "video" in source ? { kind: "video", ref: source.video } : { kind: "playlist", ref: source.playlist };
+}
+
+function fromPool({ kind, ref }: PoolSource): Source {
+  return kind === "video" ? { video: ref } : { playlist: ref };
+}
+
+function sameSource(a: Source, b: Source) {
+  return "video" in a ? "video" in b && a.video === b.video : "playlist" in b && a.playlist === b.playlist;
 }
 
 type Mode =
@@ -227,6 +257,7 @@ type Mode =
   | { kind: "add"; busy?: boolean; error?: string }
   | { kind: "rename"; id: string }
   | { kind: "confirm"; action: "remove"; station: Station }
+  | { kind: "confirm"; action: "share"; station: Station }
   | { kind: "confirm"; action: "rename"; station: Station; label: string };
 
 export function Radio() {
@@ -236,9 +267,16 @@ export function Radio() {
   // Where the tuned track is, for the deck's clock and progress line. Null before anything has loaded.
   const [clock, setClock] = useState<{ time: number; duration: number; live: boolean } | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
+  // A short word from the pool in the header (empty, unreachable, refused), until the next action.
+  const [notice, setNotice] = useState<string | null>(null);
+  // The station picked from the pool, which is never stored.
+  const [pick, setPick] = useState<Station | null>(null);
   const list = useSyncExternalStore(subscribe, readStations);
   const storedId = useSyncExternalStore(subscribe, readStation);
-  const station = list.find((s) => s.id === storedId) ?? list[0];
+  const own = list.find((s) => s.id === storedId) ?? list[0];
+  const station = pick ?? own;
+  // A pick can be kept, unless the same link is already a station of the list.
+  const keepable = pick && !list.some((s) => sameSource(s, pick));
 
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -256,6 +294,8 @@ export function Radio() {
   const ytState = useRef<number | null>(null);
   // A row to focus once the list is back, after an edit or a confirm closes.
   const pendingFocus = useRef<number | null>(null);
+  // Set while random waits on the pool, with the status from before: that loading is the pool's, not a player's.
+  const drawing = useRef<{ before: Status } | null>(null);
 
   useEffect(() => {
     stationRef.current = station;
@@ -380,14 +420,19 @@ export function Radio() {
             }
             if (data === YT_PAUSED) rememberRef.current();
             // A finished video starts over next time. Playlists loop, so they never end.
-            if (data === YT_ENDED && tunedRef.current && "video" in tunedRef.current) writePosition(tunedRef.current.id, null);
+            if (data === YT_ENDED && tunedRef.current && "video" in tunedRef.current && !tunedRef.current.pool) {
+              writePosition(tunedRef.current.id, null);
+            }
             setStatus(data === YT_PLAYING ? "playing" : data === YT_BUFFERING ? "buffering" : "paused");
           },
           onError: ({ data }) => {
             failed.current = true;
             clearTimeout(stallTimer.current);
             // 101 and 150: the owner does not allow playback outside youtube.com. 100: removed or private.
-            setBlocked([100, 101, 150].includes(data));
+            const blocked = [100, 101, 150].includes(data);
+            // A pick that can't play here is reported, so the pool can drop it.
+            if (blocked && tunedRef.current?.pool) window.flow.pool.report(toPool(tunedRef.current), data);
+            setBlocked(blocked);
             setStatus("error");
           },
         },
@@ -400,7 +445,9 @@ export function Radio() {
   const toggle = () => {
     const player = playerRef.current;
     if (status === "loading") return;
-    if (status === "idle" || status === "error" || !player) void start();
+    // Retry on a pick asks the pool for another one.
+    if (status === "error" && station.pool) void random();
+    else if (status === "idle" || status === "error" || !player) void start();
     else if (status === "playing" || status === "buffering") {
       clearTimeout(stallTimer.current);
       player.pauseVideo();
@@ -409,31 +456,85 @@ export function Radio() {
   };
 
   const restart = () => {
-    writePosition(station.id, null);
+    if (!station.pool) writePosition(station.id, null);
     void start(true);
   };
 
   const choose = (next: Station) => {
+    // A station chosen while random waits wins over the pick, and the status is the one from before the wait.
+    const was = drawing.current?.before ?? status;
+    if (drawing.current) setStatus(was);
+    drawing.current = null;
     const player = playerRef.current;
-    const live = player && status !== "idle" && status !== "error";
-    if (next.id === station.id) {
+    const live = player && was !== "idle" && was !== "error";
+    if (!next.pool && !pick && next.id === station.id) {
       // Same station: just make sure it plays.
       if (!live) void start();
-      else if (status === "paused") player.playVideo();
+      else if (was === "paused") player.playVideo();
       return;
     }
-    saveStation(next.id);
+    if (next.pool) setPick(next);
+    else {
+      setPick(null);
+      saveStation(next.id);
+    }
     stationRef.current = next;
-    if (status === "loading") return; // onReady tunes to stationRef
+    if (was === "loading") return; // onReady tunes to stationRef
     // A fresh player per station: a loaded player can keep the previous station's playlist when the next
     // one (a YouTube Mix, say) will not load into it, and that playlist would then be saved as the new one's.
     void start();
+  };
+
+  const chooseRef = useRef(choose);
+  useEffect(() => {
+    chooseRef.current = choose;
+  });
+
+  // A station from the pool, other than the pick on now. One already in the list plays from the list.
+  const random = async () => {
+    if (status === "loading") return;
+    const draw = { before: status };
+    drawing.current = draw;
+    setStatus("loading");
+    const result = await window.flow.pool.random(pick ? toPool(pick) : null);
+    // A station chosen meanwhile has taken over.
+    if (drawing.current !== draw) return;
+    if (result === "empty" || result === null) {
+      drawing.current = null;
+      setStatus((s) => (s === "loading" ? draw.before : s));
+      return setNotice(result === "empty" ? "the pool is empty" : "pool unreachable");
+    }
+    const source = fromPool(result);
+    const label = tidyTitle(result.title) || "random";
+    chooseRef.current(
+      readStations().find((s) => sameSource(s, source)) ?? ({ id: "pool", label, pool: true, ...source } as Station),
+    );
+  };
+
+  // The pick joins the list as if added, and playback carries on: positions save under its new id from here.
+  const keep = () => {
+    if (!pick || !keepable) return;
+    const { pool: _, ...rest } = pick;
+    const kept = { ...rest, id: `s-${Date.now().toString(36)}`, shared: true } as Station;
+    saveStations([...readStations(), kept]);
+    saveStation(kept.id);
+    if (tunedRef.current?.pool) tunedRef.current = kept;
+    stationRef.current = kept;
+    setPick(null);
+    window.flow.pool.keep(toPool(kept));
+  };
+
+  const share = async (target: Station) => {
+    const result = await window.flow.pool.share(toPool(target));
+    if (result === "shared") saveStations(readStations().map((s) => (s.id === target.id ? { ...s, shared: true } : s)));
+    else setNotice(result === "refused" ? "youtube won't share this one" : "pool unreachable");
   };
 
   // A live stream has no position to resume; added stations only find out once they play.
   const markLive = (target: Station) => {
     const live = { ...target, live: true };
     tunedRef.current = live;
+    if (target.pool) return setPick((p) => (p && sameSource(p, target) ? live : p));
     writePosition(target.id, null);
     saveStations(readStations().map((s) => (s.id === target.id ? live : s)));
   };
@@ -454,7 +555,7 @@ export function Radio() {
     const remaining = list.filter((s) => s.id !== target.id);
     const index = list.indexOf(target);
     // Removing the station on air stops it: the player would otherwise go on with a station that is gone.
-    if (target.id === station.id) {
+    if (target.id === own.id) {
       if (tunedRef.current?.id === target.id) {
         playerRef.current?.destroy();
         playerRef.current = null;
@@ -476,7 +577,10 @@ export function Radio() {
   const confirm = () => {
     if (mode.kind !== "confirm") return;
     if (mode.action === "remove") remove(mode.station);
-    else rename(mode.station, mode.label);
+    else if (mode.action === "share") {
+      void share(mode.station);
+      pendingFocus.current = list.indexOf(mode.station);
+    } else rename(mode.station, mode.label);
     setMode({ kind: "list" });
   };
 
@@ -489,6 +593,10 @@ export function Radio() {
     if (list.length > 1) setMode({ kind: "confirm", action: "remove", station: target });
   };
 
+  const askShare = (target: Station) => {
+    if (!target.shared) setMode({ kind: "confirm", action: "share", station: target });
+  };
+
   // The tray's play/pause item.
   const toggleRef = useRef(toggle);
   useEffect(() => {
@@ -496,12 +604,17 @@ export function Radio() {
   });
   useEffect(() => window.flow.onToggle(() => toggleRef.current()), []);
 
-  // The rows: every station, then `add station`, then the deck.
+  // The rows: every station, then random, then `add station`, then the deck.
   const focusOption = (index: number) => {
-    const n = list.length + 2;
+    const n = list.length + 3;
     const i = (index + n) % n;
-    if (i === list.length + 1) buttonRef.current?.focus();
+    if (i === list.length + 2) buttonRef.current?.focus();
     else optionRefs.current[i]?.focus();
+  };
+
+  // Any action but moving between rows clears the pool's notice.
+  const onPanelKeyCapture = (e: React.KeyboardEvent) => {
+    if (!/^(Arrow|Home$|End$|Tab$|Shift$|Meta$|Control$|Alt$)/.test(e.key)) setNotice(null);
   };
 
   // Keys that reach the panel itself, before any row has focus.
@@ -516,19 +629,19 @@ export function Radio() {
       toggle();
     } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      focusOption(list.indexOf(station));
+      focusOption(pick ? list.length : list.indexOf(station));
     }
   };
 
   const onButtonKey = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      focusOption(e.key === "ArrowUp" ? list.length : 0);
+      focusOption(e.key === "ArrowUp" ? list.length + 1 : 0);
     }
   };
 
   const onOptionKey = (e: React.KeyboardEvent, index: number) => {
-    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: list.length + 1 };
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: list.length + 2 };
     const target = list[index];
     if (e.key in moves) {
       e.preventDefault();
@@ -536,7 +649,14 @@ export function Radio() {
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       if (target) choose(target);
+      else if (index === list.length) void random();
       else setMode({ kind: "add" });
+    } else if (index === list.length && e.key === "k") {
+      e.preventDefault();
+      keep();
+    } else if (target && e.key === "s") {
+      e.preventDefault();
+      askShare(target);
     } else if (target && (e.key === "e" || e.key === "F2")) {
       e.preventDefault();
       setMode({ kind: "rename", id: target.id });
@@ -557,6 +677,8 @@ export function Radio() {
         ref={rootRef}
         tabIndex={-1}
         onKeyDown={onPanelKey}
+        onKeyDownCapture={onPanelKeyCapture}
+        onPointerDownCapture={() => setNotice(null)}
         onPointerLeave={() => {
           // Drops the inverted row the mouse left behind; a field or confirm being typed in keeps its focus.
           if (document.activeElement?.closest("[data-row]")) rootRef.current?.focus();
@@ -569,7 +691,9 @@ export function Radio() {
         <div className="flex items-center gap-3 border-b border-accent/30 px-3 pt-3 pb-2">
           <Equalizer live={playing} />
           <span className="min-w-0 flex-1 truncate text-11 font-semibold tracking-widest uppercase">
-            {blocked && status === "error" ? (
+            {notice ? (
+              <span className="text-danger">{notice} </span>
+            ) : blocked && status === "error" ? (
               <span className="text-danger">not playable outside youtube </span>
             ) : (
               <span className="text-text-dim">{on ? "on air" : "tuned"} </span>
@@ -583,6 +707,11 @@ export function Radio() {
               mode.action === "remove" ? (
                 <>
                   remove <span className="radio-text">{mode.station.label}</span>?
+                </>
+              ) : mode.action === "share" ? (
+                <>
+                  share <span className="radio-text">{mode.station.label}</span> to the pool?{" "}
+                  <span className="text-text-muted">only its youtube link goes, never who you are</span>
                 </>
               ) : (
                 <>
@@ -672,18 +801,74 @@ export function Radio() {
                         <Trash2 aria-hidden className="size-3" strokeWidth={2} />
                       </RowAction>
                     ) : null}
+                    {s.shared ? null : (
+                      <RowAction label={`share ${s.label}`} onClick={() => askShare(s)}>
+                        <Share2 aria-hidden className="size-3" strokeWidth={2} />
+                      </RowAction>
+                    )}
                   </span>
                 </div>
               );
             })}
+            {/* Random: a station from the shared pool, on air without joining the list until it is kept. */}
+            <div
+              className={cn(
+                "group flex h-row items-center focus-within:radio-fill",
+                pick ? "text-text" : "text-text-muted",
+              )}
+            >
+              <button
+                ref={(el) => {
+                  optionRefs.current[list.length] = el;
+                }}
+                type="button"
+                role="menuitemradio"
+                data-row
+                aria-checked={Boolean(pick)}
+                tabIndex={-1}
+                onClick={() => void random()}
+                onKeyDown={(e) => onOptionKey(e, list.length)}
+                onPointerMove={(e) => e.currentTarget.focus({ preventScroll: true })}
+                className="flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-12 font-semibold tracking-wider whitespace-nowrap uppercase outline-none group-focus-within:text-status"
+              >
+                <span className="flex w-5 shrink-0 justify-center text-text-dim group-focus-within:text-status">
+                  <Shuffle aria-hidden className="size-3" strokeWidth={2} />
+                </span>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    pick && "radio-text group-focus-within:text-status group-focus-within:[background:none]",
+                  )}
+                >
+                  {pick ? `random · ${pick.label}` : "random"}
+                </span>
+                {pick ? (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-2 shrink-0 rounded-full bg-accent group-focus-within:hidden",
+                      playing && "animate-pulse",
+                    )}
+                  />
+                ) : null}
+              </button>
+              {/* Keep shows whenever a pick is on, not only on the inverted row. */}
+              {keepable ? (
+                <span className="flex items-center pr-2 pl-1">
+                  <RowAction resting label={`keep ${pick.label}`} onClick={keep}>
+                    <Plus aria-hidden className="size-3" strokeWidth={2} />
+                  </RowAction>
+                </span>
+              ) : null}
+            </div>
             {mode.kind === "add" ? (
               <>
                 <Field
                   number={list.length + 1}
                   placeholder={mode.busy ? "adding…" : "paste a youtube link"}
                   disabled={mode.busy}
-                  onSubmit={(value) => (value.trim() ? void add(value) : back(list.length))}
-                  onCancel={() => back(list.length)}
+                  onSubmit={(value) => (value.trim() ? void add(value) : back(list.length + 1))}
+                  onCancel={() => back(list.length + 1)}
                   onChange={() => mode.error && setMode({ kind: "add" })}
                 />
                 {mode.error ? <p className="px-3 pb-1 pl-11 text-11 text-danger">{mode.error}</p> : null}
@@ -691,14 +876,14 @@ export function Radio() {
             ) : (
               <button
                 ref={(el) => {
-                  optionRefs.current[list.length] = el;
+                  optionRefs.current[list.length + 1] = el;
                 }}
                 type="button"
                 role="menuitem"
                 data-row
                 tabIndex={-1}
                 onClick={() => setMode({ kind: "add" })}
-                onKeyDown={(e) => onOptionKey(e, list.length)}
+                onKeyDown={(e) => onOptionKey(e, list.length + 1)}
                 onPointerMove={(e) => e.currentTarget.focus({ preventScroll: true })}
                 className="group flex h-row items-center gap-3 px-3 text-left text-12 font-semibold tracking-wider whitespace-nowrap text-text-dim uppercase outline-none focus:radio-fill focus:text-status"
               >
@@ -831,7 +1016,7 @@ function Field({
   );
 }
 
-/** The confirm step for renames and removals, in place of the list. Enter confirms, esc goes back. */
+/** The confirm step for renames, removals and shares, in place of the list. Enter confirms, esc goes back. */
 function Confirm({
   question,
   verb,
@@ -839,7 +1024,7 @@ function Confirm({
   onCancel,
 }: {
   question: React.ReactNode;
-  verb: "remove" | "rename";
+  verb: "remove" | "rename" | "share";
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -886,15 +1071,29 @@ function Confirm({
   );
 }
 
-/** Edit and remove on an inverted station row, black on the gradient. */
-function RowAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+/** Edit, remove and share on an inverted station row, black on the gradient. A resting one (keep) also shows,
+ * dim, on the row at rest. */
+function RowAction({
+  label,
+  resting,
+  onClick,
+  children,
+}: {
+  label: string;
+  resting?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       tabIndex={-1}
       aria-label={label}
       onClick={onClick}
-      className="flex size-6 items-center justify-center rounded-sm text-status outline-none hover:bg-status/15"
+      className={cn(
+        "flex size-6 items-center justify-center rounded-sm outline-none hover:bg-status/15",
+        resting ? "text-text-dim hover:text-text group-focus-within:text-status" : "text-status",
+      )}
     >
       {children}
     </button>

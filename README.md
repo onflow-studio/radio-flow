@@ -25,12 +25,13 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 
 - **Five stations, ready to go.** Hacker radio (live), 40hz gamma, minimal techno, a deep work mix and brain.fm sessions.
 - **Add your own.** Paste any YouTube video, live stream or playlist link. Radio Flow names the station from the video's title.
+- **Random stations from other listeners.** The random row plays a station someone shared to an anonymous pool. Keep the ones you like, and share your own if you want to.
 - **Picks up where you left off.** Each station remembers its spot, even after you quit or restart. Playlists keep their shuffled order.
 - **Always know where you are.** The play bar shows elapsed time and length, or `LIVE` for streams, with a progress line glowing along its edge.
 - **An icon that shows what's on.** The equalizer holds still when stopped and bounces while music plays, so you can tell at a glance.
-- **Keyboard first.** Arrows to move, enter to play, `e` to rename, delete to remove, esc to close.
-- **Careful edits.** Renames and removals ask before they happen.
-- **Quiet by design.** Nothing touches YouTube until you press play. No dock icon, no window, no telemetry.
+- **Keyboard first.** Arrows to move, enter to play, `e` to rename, delete to remove, `s` to share, `k` to keep, esc to close.
+- **Careful edits.** Renames, removals and shares ask before they happen.
+- **Quiet by design.** Nothing touches YouTube until you press play, and nothing touches the pool until you click random, share or keep. A station's YouTube link only leaves your Mac when you share it, and who you are never does. No dock icon, no window, no telemetry.
 
 ## Install
 
@@ -54,6 +55,9 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 | **+ add station**, paste a link, enter | Add a station |
 | Hover a station, then ✎ or `e` | Rename it (asks first) |
 | Hover a station, then 🗑 or delete | Remove it (asks first) |
+| Hover a station, then the share icon or `s` | Share it to the pool (asks first) |
+| Click **random**, or enter on it | Play a station from the pool. Again for another |
+| **+** on the random row, or `k` | Keep the random station in your list |
 | esc, or click anywhere else | Close the panel. Music keeps playing |
 | Right-click the equalizer | Play/pause, Open at Login, Quit |
 
@@ -63,9 +67,9 @@ Focus music lives in a YouTube tab. The tab gets closed, buried under forty othe
 >_ radio-flow --stack
 lang       TypeScript 74% · JavaScript 17% · CSS 7%
 stack      Electron · React · Vite · Tailwind 4
-talks to   YouTube, through its official player, from the first play
+talks to   YouTube, through its official player, from the first play · the shared pool, only for random, share and keep
 stores     your stations and where each one stopped, in one file in your Library folder
-runs on    macOS, Apple Silicon · no server, no account
+runs on    macOS, Apple Silicon · the pool is a small Cloudflare Worker that stores YouTube links and keep counts · no account
 ```
 
 ## How it works
@@ -73,6 +77,8 @@ runs on    macOS, Apple Silicon · no server, no account
 Radio Flow is a small Electron app. The panel is a React page in a frameless window that only ever hides, so the music keeps playing while it's closed. Audio comes from the official YouTube IFrame player, kept in a hidden 1px box inside that window. YouTube's ads, terms and creators all stay in the loop.
 
 Your stations and the spot each one stopped at are saved to `~/Library/Application Support/Radio Flow/store.json`. That file is the only thing it stores, and it never leaves your Mac.
+
+The random row draws from a shared pool, a small server in [`pool/`](pool/README.md). What goes out: a station's YouTube link, only when you share it, and a request to the pool when you click random, keep a station, or a random station won't play (so the pool can drop it). Who you are never goes out: no account, no ID, no listening history. Random stations you don't keep are never saved, and if the pool can't be reached, everything else works as before.
 
 ## Build it yourself
 
